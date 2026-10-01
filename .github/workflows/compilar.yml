@@ -1,0 +1,52 @@
+name: Compilar APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Configurar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Preparar Android y permisos de conexion
+        run: |
+          cp lib/main.dart main_temp.dart
+          cp pubspec.yaml pubspec_temp.yaml
+          flutter create --platforms=android --org com.almacen .
+          cp main_temp.dart lib/main.dart
+          cp pubspec_temp.yaml pubspec.yaml
+          python3 -c "
+          path = 'android/app/src/main/AndroidManifest.xml'
+          with open(path, 'r') as f:
+              c = f.read()
+          if 'android.permission.INTERNET' not in c:
+              c = c.replace('<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">', '<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n    <uses-permission android:name=\"android.permission.INTERNET\"/>')
+              with open(path, 'w') as f:
+                  f.write(c)
+          "
+          flutter pub get
+
+      - name: Compilar APK Android
+        run: flutter build apk --release
+
+      - name: Guardar APK para descarga
+        uses: actions/upload-artifact@v4
+        with:
+          name: Almacen-Escuelas-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
